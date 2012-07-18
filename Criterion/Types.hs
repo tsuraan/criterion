@@ -34,11 +34,13 @@ module Criterion.Types
     , nfIO
     , whnfIO
     , bench
+    , bench'
     , bgroup
     , bcompare
     , benchNames
     ) where
 
+import Criterion.Monad ( Criterion )
 import Control.DeepSeq (NFData, rnf)
 import Control.Exception (evaluate)
 
@@ -104,7 +106,12 @@ instance Benchmarkable (IO a) where
 -- with a name, created with 'bench', or a (possibly nested) group of
 -- 'Benchmark's, created with 'bgroup'.
 data Benchmark where
-    Benchmark    :: Benchmarkable b => String -> b -> Benchmark
+    Benchmark    :: Benchmarkable b =>
+                    Criterion ()
+                 -> Criterion ()
+                 -> String
+                 -> b
+                 -> Benchmark
     BenchGroup   :: String -> [Benchmark] -> Benchmark
     BenchCompare :: [Benchmark] -> Benchmark
 
@@ -113,7 +120,22 @@ bench :: Benchmarkable b =>
          String                 -- ^ A name to identify the benchmark.
       -> b
       -> Benchmark
-bench = Benchmark
+bench = Benchmark (return ()) (return ())
+
+-- | Create a single benchmark with a setup and a teardown function.  The
+-- setup function is called before the benchmark is run, and the teardown is
+-- run afterwards.  Note that Criterion runs each benchmark repeatedly, while
+-- these setup and teardown functions are run once per bench.  This limits the
+-- utility of the setup and teardown functions somewhat, but they can still
+-- ensure that each bench is run in an environment that is clear from the
+-- effects of other bench runs.
+bench' :: Benchmarkable b =>
+          Criterion ()
+       -> Criterion ()
+       -> String
+       -> b
+       -> Benchmark
+bench' = Benchmark
 
 -- | Group several benchmarks together under a common name.
 bgroup :: String                -- ^ A name to identify the group of benchmarks.
@@ -134,11 +156,11 @@ bcompare = BenchCompare
 -- | Retrieve the names of all benchmarks.  Grouped benchmarks are
 -- prefixed with the name of the group they're in.
 benchNames :: Benchmark -> [String]
-benchNames (Benchmark d _)   = [d]
+benchNames (Benchmark _ _ d _)   = [d]
 benchNames (BenchGroup d bs) = map ((d ++ "/") ++) . concatMap benchNames $ bs
 benchNames (BenchCompare bs) =                       concatMap benchNames $ bs
 
 instance Show Benchmark where
-    show (Benchmark d _)  = ("Benchmark " ++ show d)
+    show (Benchmark _ _ d _)  = ("Benchmark " ++ show d)
     show (BenchGroup d _) = ("BenchGroup " ++ show d)
     show (BenchCompare _) = ("BenchCompare")

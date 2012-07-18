@@ -141,10 +141,12 @@ runAndAnalyse p env bs' = do
   plotAll $ flatten rts
 
   where go :: String -> Benchmark -> Criterion ResultForest
-        go pfx (Benchmark desc b)
+        go pfx (Benchmark setup teardown desc b)
             | p desc'   = do _ <- note "\nbenchmarking %s\n" desc'
                              summary (show desc' ++ ",") -- String will be quoted
+                             _ <- setup
                              (x,an,out) <- runAndAnalyseOne env desc' b
+                             _ <- teardown
                              let result = Result desc' x an out
                              return [Single result]
             | otherwise = return []
